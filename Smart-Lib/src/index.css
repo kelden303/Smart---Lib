@@ -1,0 +1,80 @@
+/* Base styles - Premium Dark Glassmorphism Theme 
+   This file sets up the foundation and color variables for our app. 
+*/
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+}
+
+:root {
+  /* Brand Colors - Deep violet and blue hues */
+  --primary: #8b5cf6;       /* Main Purple */
+  --primary-dark: #6d28d9;  /* Darker Purple for hover states */
+  --primary-light: #a78bfa; /* Lighter Purple */
+  
+  /* Status Colors representing different states */
+  --success: #10b981; /* Green for Up to Date */
+  --warning: #f59e0b; /* Orange for urgent */
+  --danger: #ef4444;  /* Red for Overdue/Errors */
+  --info: #3b82f6;    /* Blue for general info */
+  
+  /* Dark Mode Backgrounds */
+  --background: #0f172a; /* Very dark blue for main app background */
+  
+  /* Glassmorphism Surface Background - semi transparent white/blue for cards */
+  --surface: rgba(30, 41, 59, 0.7); 
+  --surface-hover: rgba(51, 65, 85, 0.8);
+  
+  /* Typography Colors for Dark Mode */
+  --text-primary: #f8fafc;   /* White text for main headings */
+  --text-secondary: #94a3b8; /* Gray text for secondary info */
+  
+  /* Borders and Dividers */
+  --border: rgba(255, 255, 255, 0.1); 
+  --border-light: rgba(255, 255, 255, 0.2); 
+}
+
+/* Base Body Font and Background styling */
+body {
+  /* Use 'Inter' font for standard text, falling back to system fonts */
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  
+  /* Apply dark background and light text */
+  background: var(--background);
+  color: var(--text-primary);
+  
+  /* Better text rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+}
+
+/* Headings will use the 'Outfit' font for a modern look */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 600;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input, select, textarea {
+  font-family: inherit;
+}
+
