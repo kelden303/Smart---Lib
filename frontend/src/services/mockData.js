@@ -2,7 +2,9 @@ import axios from 'axios';
 
 // We replaced the old mock data logic with real Axios requests to our Express backend!
 // Using 127.0.0.1 instead of localhost for better cross-platform compatibility
-const API = axios.create({ baseURL: 'http://127.0.0.1:5000/api' });
+const API = axios.create({ 
+  baseURL: import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000/api' 
+});
 
 // Add token to requests
 API.interceptors.request.use((req) => {
@@ -78,6 +80,11 @@ export const transactionApi = {
 
   return: async (transactionId) => {
     const { data } = await API.post(`/transactions/return/${transactionId}`);
+    return data;
+  },
+
+  payFine: async (transactionId) => {
+    const { data } = await API.post(`/transactions/pay/${transactionId}`);
     return data;
   }
 };

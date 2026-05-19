@@ -20,7 +20,12 @@ function Login({ onLogin, onSwitchToSignup, onForgotPassword, onBackToLanding })
       setIsLoading(false)
       onLogin(validUser)
     } catch (err) {
-      const message = err.response?.data?.message || 'Invalid username or password'
+      let message = 'Invalid username or password'
+      if (!err.response) {
+        message = 'Cannot connect to server. Please ensure backend is running.'
+      } else if (err.response.data && err.response.data.message) {
+        message = err.response.data.message
+      }
       setError(message)
       setIsLoading(false)
     }

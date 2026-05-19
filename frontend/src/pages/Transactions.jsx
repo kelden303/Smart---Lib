@@ -1,13 +1,17 @@
 import { useState } from 'react'
-import { FaExchangeAlt, FaPlus, FaUndo, FaInfoCircle, FaBook, FaUser, FaCalendar, FaClock, FaSearch, FaExclamationTriangle, FaCheckCircle } from 'react-icons/fa'
+import { FaExchangeAlt, FaPlus, FaUndo, FaInfoCircle, FaBook, FaUser, FaCalendar, FaClock, FaSearch, FaExclamationTriangle, FaCheckCircle, FaMoneyBillWave, FaQrcode, FaCreditCard } from 'react-icons/fa'
 
-function Transactions({ transactions, users, books, borrowBook, returnBook, currentUser }) {
+function Transactions({ transactions, users, books, borrowBook, returnBook, payFine, currentUser }) {
   const [showBorrowForm, setShowBorrowForm] = useState(false)
   const [selectedUser, setSelectedUser] = useState('')
   const [selectedBook, setSelectedBook] = useState('')
   const [borrowQuantity, setBorrowQuantity] = useState(1)
   const [selectedBookDetails, setSelectedBookDetails] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [selectedTransactionForPay, setSelectedTransactionForPay] = useState(null)
+  const [paymentMethod, setPaymentMethod] = useState('upi')
+  const [isProcessing, setIsProcessing] = useState(false)
 
   const availableBooks = books.filter(b => b.available > 0)
 
@@ -83,20 +87,106 @@ function Transactions({ transactions, users, books, borrowBook, returnBook, curr
     returnBook(transactionId)
   }
 
+  const handleOpenPayment = (transaction) => {
+    setSelectedTransactionForPay(transaction)
+    setShowPaymentModal(true)
+  }
+
+  const handleConfirmPayment = async () => {
+    setIsProcessing(true)
+    // Simulate payment delay
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    await payFine(selectedTransactionForPay._id)
+    setIsProcessing(false)
+    setShowPaymentModal(false)
+    setSelectedTransactionForPay(null)
+  }
+
   return (
     <div className="page">
+      {/* Payment Simulation Modal */}
+      {showPaymentModal && selectedTransactionForPay && (
+        <div className="modal-overlay" onClick={() => !isProcessing && setShowPaymentModal(false)}>
+          <div className="modal-content payment-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="payment-header">
+              <h2>Secure Payment</h2>
+              <p>Complete your fine payment of <strong>₹{selectedTransactionForPay.fine}</strong></p>
+            </div>
+
+            <div className="payment-tabs">
+              <button 
+                className={`payment-tab ${paymentMethod === 'upi' ? 'active' : ''}`}
+                onClick={() => setPaymentMethod('upi')}
+              >
+                <FaQrcode /> UPI Scan
+              </button>
+              <button 
+                className={`payment-tab ${paymentMethod === 'card' ? 'active' : ''}`}
+                onClick={() => setPaymentMethod('card')}
+              >
+                <FaCreditCard /> Card
+              </button>
+            </div>
+
+            <div className="payment-body">
+              {paymentMethod === 'upi' ? (
+                <div className="upi-section">
+                  <div className="qr-container">
+                    <FaQrcode size={120} />
+                    <div className="qr-overlay">MOCK QR</div>
+                  </div>
+                  <p>Scan this QR code using any UPI app (GPay, PhonePe, Paytm)</p>
+                  <div className="upi-apps-icons">
+                    <span>GPay</span> <span>PhonePe</span> <span>Paytm</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="card-section">
+                  <div className="mock-card-form">
+                    <input type="text" placeholder="Card Number" defaultValue="4111 2222 3333 4444" disabled />
+                    <div className="card-row">
+                      <input type="text" placeholder="MM/YY" defaultValue="12/26" disabled />
+                      <input type="text" placeholder="CVV" defaultValue="***" disabled />
+                    </div>
+                    <input type="text" placeholder="Card Holder Name" defaultValue={currentUser?.name || ''} disabled />
+                  </div>
+                  <p className="hint">Simulation: Card details are pre-filled for testing.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="payment-footer">
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => setShowPaymentModal(false)}
+                disabled={isProcessing}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn btn-primary" 
+                onClick={handleConfirmPayment}
+                disabled={isProcessing}
+              >
+                {isProcessing ? 'Processing...' : `Pay ₹${selectedTransactionForPay.fine} Now`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="page-header">
         <h1>Transactions</h1>
         {currentUser?.role?.toLowerCase() === 'admin' && (
           <button className="btn btn-primary" onClick={() => setShowBorrowForm(!showBorrowForm)}>
-            <FaPlus /> Borrow Book
+            <FaPlus /> Issue Book
           </button>
         )}
       </div>
 
       {showBorrowForm && (
         <div className="form-card">
-          <h2>Borrow Book</h2>
+          <h2>Issue Book</h2>
           <form onSubmit={handleBorrow}>
             <div className="form-grid">
               <div className="form-group">
@@ -166,7 +256,7 @@ function Transactions({ transactions, users, books, borrowBook, returnBook, curr
               </div>
             )}
             
-            <button type="submit" className="btn btn-primary">Confirm Borrow</button>
+            <button type="submit" className="btn btn-primary">Confirm Issue</button>
           </form>
         </div>
       )}
@@ -255,14 +345,40 @@ function Transactions({ transactions, users, books, borrowBook, returnBook, curr
                     </div>
                   </div>
                 )}
+                {t.fine > 0 && (
+                  <div className="trans-detail" style={{ 
+                    backgroundColor: t.paymentStatus === 'paid' ? 'rgba(46, 204, 113, 0.1)' : 'rgba(231, 76, 60, 0.1)',
+                    padding: '8px',
+                    borderRadius: '8px',
+                    border: `1px solid ${t.paymentStatus === 'paid' ? '#2ecc71' : '#e74c3c'}`
+                  }}>
+                    <FaMoneyBillWave className="detail-icon" style={{ color: t.paymentStatus === 'paid' ? '#2ecc71' : '#e74c3c' }} />
+                    <div>
+                      <span className="detail-label" style={{ 
+                        color: t.paymentStatus === 'paid' ? '#2ecc71' : '#e74c3c',
+                        fontWeight: 'bold'
+                      }}>
+                        Fine: ₹{t.fine}
+                      </span>
+                      <span className="detail-value" style={{ fontSize: '0.85rem' }}>
+                        {t.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
-              {t.status === 'borrowed' && (
-                <div className="transaction-actions">
+              <div className="transaction-actions">
+                {t.status === 'borrowed' && (
                   <button className="btn btn-success btn-sm" onClick={() => handleReturn(t._id)}>
                     <FaUndo /> Return Book
                   </button>
-                </div>
-              )}
+                )}
+                {t.fine > 0 && t.paymentStatus === 'unpaid' && (
+                  <button className="btn btn-primary btn-sm" onClick={() => handleOpenPayment(t)} style={{ marginLeft: '10px' }}>
+                    <FaMoneyBillWave /> Pay Fine
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>

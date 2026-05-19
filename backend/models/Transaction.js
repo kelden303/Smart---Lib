@@ -8,6 +8,8 @@ const transactionSchema = new mongoose.Schema({
   borrowDate: { type: Date, default: Date.now },
   dueDate: { type: Date, required: true },
   returnDate: { type: Date, default: null },
+  fine: { type: Number, default: 0 },
+  paymentStatus: { type: String, enum: ['unpaid', 'paid', 'none'], default: 'none' },
   quantity: { type: Number, default: 1 },
   createdAt: { type: Date, default: Date.now }
 });

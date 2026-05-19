@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Routes, Route, Link, useNavigate } from 'react-router-dom'
-import { FaHome, FaBook, FaUsers, FaExchangeAlt, FaSignOutAlt, FaPlus, FaSearch, FaArrowRight, FaStar, FaClock, FaBolt, FaCheckCircle, FaExclamationCircle, FaTimes } from 'react-icons/fa'
+import { FaHome, FaBook, FaUsers, FaExchangeAlt, FaSignOutAlt, FaPlus, FaSearch, FaArrowRight, FaStar, FaClock, FaBolt, FaCheckCircle, FaExclamationCircle, FaTimes, FaMoneyBillWave } from 'react-icons/fa'
 import Books from './pages/Books'
 import Users from './pages/Users'
 import Transactions from './pages/Transactions'
+import Payments from './pages/Payments'
+import Profile from './pages/Profile'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import ForgotPassword from './pages/ForgotPassword'
@@ -19,10 +21,17 @@ function App() {
     { _id: '2', user: { name: 'Jane Smith' }, book: { title: '1984' }, status: 'returned', borrowDate: new Date(Date.now() - 10*24*60*60*1000).toISOString(), returnDate: new Date(Date.now() - 5*24*60*60*1000).toISOString() }
   ])
   const [loading, setLoading] = useState(true)
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [currentUser, setCurrentUser] = useState(null)
+  const [isLoggedIn, setIsLoggedIn] = useState(() => !!localStorage.getItem('smartLibUser'))
+  const [currentUser, setCurrentUser] = useState(() => {
+    const user = localStorage.getItem('smartLibUser')
+    return user ? JSON.parse(user) : null
+  })
   const [notification, setNotification] = useState({ show: false, message: '', type: 'info' })
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null })
+  const [showLanding, setShowLanding] = useState(true)
+  const [showSignup, setShowSignup] = useState(false)
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
+
 
   const showNotification = (message, type = 'info') => {
     setNotification({ show: true, message, type })
@@ -34,21 +43,6 @@ function App() {
   }
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('smartLibUser')
-    if (storedUser) {
-      const parsedUser = JSON.parse(storedUser);
-      setIsLoggedIn(true)
-      setCurrentUser(parsedUser)
-      
-      // Fetch fresh user data to ensure department/details are up-to-date
-      userApi.getAll().then(users => {
-        const freshUser = users.find(u => u._id === parsedUser._id);
-        if (freshUser) {
-          setCurrentUser(freshUser);
-          localStorage.setItem('smartLibUser', JSON.stringify(freshUser));
-        }
-      });
-    }
     fetchData()
   }, [])
 
@@ -125,9 +119,26 @@ function App() {
     try {
       const updated = await transactionApi.return(transactionId)
       setTransactions(transactions.map(t => t._id === transactionId ? updated : t))
+      if (updated.fine > 0) {
+        showNotification(`Book returned late. A fine of ₹${updated.fine} has been recorded.`, 'warning')
+      } else {
+        showNotification('Book returned successfully!', 'success')
+      }
       fetchData()
     } catch (error) {
       console.error('Error returning book:', error)
+      alert(error.message)
+    }
+  }
+  
+  const payFine = async (transactionId) => {
+    try {
+      const result = await transactionApi.payFine(transactionId)
+      setTransactions(transactions.map(t => t._id === transactionId ? result.transaction : t))
+      showNotification('Fine paid successfully!', 'success')
+      fetchData()
+    } catch (error) {
+      console.error('Error paying fine:', error)
       alert(error.message)
     }
   }
@@ -167,22 +178,18 @@ function App() {
     )
   }
 
-  if (loading) {
-    return <div className="loading">Loading Smart-Lib...</div>
-  }
-
   if (!isLoggedIn) {
-    if (showForgotPassword) {
-      return <ForgotPassword onBackToLogin={() => setShowForgotPassword(false)} />
-    }
-    if (showSignup) {
-      return <Signup onSwitchToLogin={() => setShowSignup(false)} onBackToLanding={() => { setShowLanding(true); setShowSignup(false); }} />
-    }
     if (showLanding) {
       return <Landing 
         onGetStarted={() => { setShowLanding(false); setShowSignup(true); }} 
         onLogin={() => { setShowLanding(false); setShowSignup(false); }} 
       />
+    }
+    if (showForgotPassword) {
+      return <ForgotPassword onBackToLogin={() => setShowForgotPassword(false)} />
+    }
+    if (showSignup) {
+      return <Signup onSwitchToLogin={() => setShowSignup(false)} onBackToLanding={() => { setShowLanding(true); setShowSignup(false); }} />
     }
     return <Login 
       onLogin={handleLogin} 
@@ -190,6 +197,10 @@ function App() {
       onForgotPassword={() => setShowForgotPassword(true)} 
       onBackToLanding={() => setShowLanding(true)}
     />
+  }
+
+  if (loading) {
+    return <div className="loading">Loading Smart-Lib...</div>
   }
 
   const CustomNotification = () => {
@@ -245,6 +256,9 @@ function App() {
           {(currentUser?.role?.toLowerCase() === 'admin' || currentUser?.role?.toLowerCase() === 'normal') && (
             <Link to="/users" className="nav-link"><FaUsers /> Users</Link>
           )}
+          {currentUser?.role?.toLowerCase() === 'admin' && (
+            <Link to="/payments" className="nav-link"><FaMoneyBillWave /> Payments</Link>
+          )}
           <Link to="/transactions" className="nav-link"><FaExchangeAlt /> {currentUser?.role?.toLowerCase() === 'admin' ? 'Transactions' : 'My History'}</Link>
         </div>
       </nav>
@@ -258,7 +272,9 @@ function App() {
             ? <Users users={users} addUser={addUser} currentUser={currentUser} updateUserRole={updateUserRole} removeUser={removeUser} /> 
             : <div className="page"><h1>Unauthorized Access</h1><p>You don't have permission to view this page.</p></div>
           } />
-          <Route path="/transactions" element={<Transactions transactions={transactions} users={users} books={books} borrowBook={borrowBook} returnBook={returnBook} currentUser={currentUser} />} />
+          <Route path="/transactions" element={<Transactions transactions={transactions} users={users} books={books} borrowBook={borrowBook} returnBook={returnBook} payFine={payFine} currentUser={currentUser} />} />
+          <Route path="/payments" element={currentUser?.role?.toLowerCase() === 'admin' ? <Payments transactions={transactions} /> : <div className="page"><h1>Unauthorized</h1></div>} />
+          <Route path="/profile" element={<Profile currentUser={currentUser} />} />
         </Routes>
       </main>
     </div>
@@ -295,6 +311,10 @@ function Home({ books, users, transactions, currentUser }) {
   const totalUsers = users.length
   const issuedBooks = userTransactions.filter(t => t.status === 'borrowed').length
   const returnedBooks = userTransactions.filter(t => t.status === 'returned').length
+  
+  const unpaidFines = userTransactions.filter(t => t.paymentStatus === 'unpaid');
+  const totalFineAmount = unpaidFines.reduce((sum, t) => sum + (t.fine || 0), 0);
+  const pendingPaymentsCount = unpaidFines.length;
 
   const availableBooks = books.filter(book => {
     const borrowed = transactions.filter(t => t.book?._id === book._id && t.status === 'borrowed').length
@@ -378,6 +398,12 @@ function Home({ books, users, transactions, currentUser }) {
                 <FaSearch /> Search Library
                 <FaArrowRight className="action-arrow" />
               </button>
+              {totalFineAmount > 0 && (
+                <button className="quick-action-btn" onClick={() => navigate('/transactions')} style={{ background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' }}>
+                  <FaMoneyBillWave /> Pay Pending Fines (₹{totalFineAmount})
+                  <FaArrowRight className="action-arrow" />
+                </button>
+              )}
             </>
           )}
           <button className="quick-action-btn" onClick={() => navigate('/books')}>
@@ -414,6 +440,13 @@ function Home({ books, users, transactions, currentUser }) {
           <div className="stat-info">
             <h3>{returnedBooks}</h3>
             <p>Books Returned</p>
+          </div>
+        </div>
+        <div className="stat-card" style={{ borderLeft: totalFineAmount > 0 ? '4px solid #ef4444' : '1px solid var(--border)' }}>
+          <FaMoneyBillWave className="stat-icon" style={{ color: totalFineAmount > 0 ? '#ef4444' : 'var(--primary)', background: totalFineAmount > 0 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(99, 102, 241, 0.1)' }} />
+          <div className="stat-info">
+            <h3>₹{totalFineAmount}</h3>
+            <p>{isAdmin ? 'Total Unpaid Fines' : 'My Pending Fines'}</p>
           </div>
         </div>
       </div>

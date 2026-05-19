@@ -6,7 +6,6 @@ import './Auth.css'
 function Signup({ onSwitchToLogin, onBackToLanding }) {
   const [formData, setFormData] = useState({
     name: '',
-    username: '',
     email: '',
     phone: '',
     password: '',
@@ -66,6 +65,7 @@ function Signup({ onSwitchToLogin, onBackToLanding }) {
     try {
       await authApi.signup({
         ...formData,
+        username: formData.name, // Use name as username
         phone: `+91${formData.phone}`,
         role: 'student' // Default role for signup
       })
@@ -113,12 +113,8 @@ function Signup({ onSwitchToLogin, onBackToLanding }) {
           <form onSubmit={handleSubmit} className="auth-form">
             <div className="form-row">
               <div className="form-group">
-                <label><FaUser /> Full Name</label>
+                <label><FaUser /> Name / Username</label>
                 <input type="text" name="name" value={formData.name} onChange={handleChange} placeholder="John Doe" required />
-              </div>
-              <div className="form-group">
-                <label><FaUser /> Username</label>
-                <input type="text" name="username" value={formData.username} onChange={handleChange} placeholder="johndoe123" required />
               </div>
             </div>
 

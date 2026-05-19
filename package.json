@@ -8,6 +8,8 @@
     "mongoose": "^9.4.1"
   },
   "scripts": {
-    "start": "node backend/server.js"
+    "start": "node backend/server.js",
+    "dev:backend": "node backend/server.js",
+    "dev:frontend": "cd frontend && npm run dev"
   }
 }

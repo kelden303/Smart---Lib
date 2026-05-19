@@ -61,7 +61,7 @@ const Landing = ({ onLogin, onGetStarted }) => {
             <FaExchangeAlt /> <span>12+ Returns Today</span>
           </div>
           <div className="floating-card c2">
-            <FaUsers /> <span>500+ Active Users</span>
+            <FaUsers /> <span>20+ Active Users</span>
           </div>
         </div>
       </header>
