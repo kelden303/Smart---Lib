@@ -26,159 +26,186 @@ app.use((req, res, next) => {
 });
 
 // Connect to MongoDB
-mongoose.connect(process.env.DB_URI)
-  .then(async () => {
-    console.log('Connected to MongoDB');
-    
-    // Ensure Admin User Exists
-    const adminExists = await User.findOne({ role: 'admin' });
-    if (!adminExists) {
-      console.log('No admin found. Creating default admin...');
-      const hashedPassword = await bcrypt.hash('password123', 10);
-      await User.create({
-        username: 'admin',
-        password: hashedPassword,
-        name: 'Administrator',
-        email: 'admin@smartlib.com',
-        role: 'admin'
-      });
-      console.log('Default admin created: admin / password123');
-    }
+// Database connection caching helper for Vercel Serverless environment
+let cachedConnection = null;
 
-    // Seed books if collection is empty or as requested
-    const bookCount = await Book.countDocuments();
-    if (bookCount === 0) {
-      console.log('Seeding initial book collection...');
-      const newBestSellers = [
-        {
-          title: "The Women",
-          author: "Kristin Hannah",
-          isbn: "9781250178633",
-          category: "Historical Fiction",
-          quantity: 10,
-          available: 10,
-          description: "A story of a nurse during the Vietnam War, exploring the heroism and sacrifice of women who served.",
-          publisher: "St. Martin's Press",
-          publishedYear: 2024,
-          imageUrl: "https://images-na.ssl-images-amazon.com/images/P/1250178630.01.LZZZZZZZ.jpg"
-        },
-        {
-          title: "A Court of Thorns and Roses",
-          author: "Sarah J. Maas",
-          isbn: "9781635575569",
-          category: "Fantasy",
-          quantity: 8,
-          available: 8,
-          description: "A huntress becomes entangled in the world of the fae in this epic fantasy romance.",
-          publisher: "Bloomsbury Publishing",
-          publishedYear: 2020,
-          imageUrl: "https://images-na.ssl-images-amazon.com/images/P/1635575567.01.LZZZZZZZ.jpg"
-        },
-        {
-          title: "The Scarlet Shedder (Dog Man #12)",
-          author: "Dav Pilkey",
-          isbn: "9781338801910",
-          category: "Children's Fiction",
-          quantity: 15,
-          available: 15,
-          description: "The latest adventure of Dog Man, the hero who is part dog and part man.",
-          publisher: "Graphix",
-          publishedYear: 2024,
-          imageUrl: "https://images-na.ssl-images-amazon.com/images/P/1338801915.01.LZZZZZZZ.jpg"
-        },
-        {
-          title: "The Housemaid",
-          author: "Freida McFadden",
-          isbn: "9781538749449",
-          category: "Thriller",
-          quantity: 12,
-          available: 12,
-          description: "A twisty psychological thriller about a housemaid who learns a family's dark secrets.",
-          publisher: "Grand Central Publishing",
-          publishedYear: 2022,
-          imageUrl: "https://images-na.ssl-images-amazon.com/images/P/1538749446.01.LZZZZZZZ.jpg"
-        },
-        {
-          title: "Atomic Habits",
-          author: "James Clear",
-          isbn: "9780735211292",
-          category: "Self-Help",
-          quantity: 20,
-          available: 20,
-          description: "A proven framework for improving every day through tiny habits.",
-          publisher: "Avery",
-          publishedYear: 2018,
-          imageUrl: "https://images-na.ssl-images-amazon.com/images/P/0735211299.01.LZZZZZZZ.jpg"
-        },
-        {
-          title: "It Ends with Us",
-          author: "Colleen Hoover",
-          isbn: "9781501110368",
-          category: "Romance",
-          quantity: 10,
-          available: 10,
-          description: "A poignant story about domestic violence and the strength it takes to leave.",
-          publisher: "Atria Books",
-          publishedYear: 2016,
-          imageUrl: "https://images-na.ssl-images-amazon.com/images/P/1501110365.01.LZZZZZZZ.jpg"
-        },
-        {
-          title: "Iron Flame",
-          author: "Rebecca Yarros",
-          isbn: "9781649374172",
-          category: "Fantasy",
-          quantity: 7,
-          available: 7,
-          description: "The thrilling sequel to Fourth Wing, continuing the dragon rider saga.",
-          publisher: "Entangled: Red Tower Books",
-          publishedYear: 2023,
-          imageUrl: "https://images-na.ssl-images-amazon.com/images/P/1649374178.01.LZZZZZZZ.jpg"
-        },
-        {
-          title: "Fourth Wing",
-          author: "Rebecca Yarros",
-          isbn: "9781649374042",
-          category: "Fantasy",
-          quantity: 7,
-          available: 7,
-          description: "A dragon-riding academy fantasy that captured the world's imagination.",
-          publisher: "Entangled: Red Tower Books",
-          publishedYear: 2023,
-          imageUrl: "https://images-na.ssl-images-amazon.com/images/P/1649374046.01.LZZZZZZZ.jpg"
-        },
-        {
-          title: "A Court of Mist and Fury",
-          author: "Sarah J. Maas",
-          isbn: "9781635575583",
-          category: "Fantasy",
-          quantity: 8,
-          available: 8,
-          description: "The stunning sequel to A Court of Thorns and Roses.",
-          publisher: "Bloomsbury Publishing",
-          publishedYear: 2020,
-          imageUrl: "https://images-na.ssl-images-amazon.com/images/P/1635575583.01.LZZZZZZZ.jpg"
-        },
-        {
-          title: "It Starts with Us",
-          author: "Colleen Hoover",
-          isbn: "9781668001226",
-          category: "Romance",
-          quantity: 10,
-          available: 10,
-          description: "The long-awaited sequel to the global phenomenon It Ends with Us.",
-          publisher: "Atria Books",
-          publishedYear: 2022,
-          imageUrl: "https://images-na.ssl-images-amazon.com/images/P/1668001225.01.LZZZZZZZ.jpg"
-        }
-      ];
-      await Book.insertMany(newBestSellers);
-      console.log('Successfully seeded 10 books!');
-    }
-  })
-  .catch((err) => {
-    console.error('CRITICAL: Failed to connect to MongoDB', err);
-    process.exit(1); // Exit if DB connection fails
+async function connectToDatabase() {
+  if (cachedConnection && mongoose.connection.readyState === 1) {
+    return cachedConnection;
+  }
+
+  if (!process.env.DB_URI) {
+    throw new Error('DB_URI environment variable is missing.');
+  }
+
+  // Set timeout options so Mongoose fails quickly in serverless instead of hanging for 30s
+  cachedConnection = await mongoose.connect(process.env.DB_URI, {
+    serverSelectionTimeoutMS: 5000, // 5 seconds timeout
   });
+
+  console.log('Connected to MongoDB');
+  
+  // Ensure Admin User Exists
+  const adminExists = await User.findOne({ role: 'admin' });
+  if (!adminExists) {
+    console.log('No admin found. Creating default admin...');
+    const hashedPassword = await bcrypt.hash('password123', 10);
+    await User.create({
+      username: 'admin',
+      password: hashedPassword,
+      name: 'Administrator',
+      email: 'admin@smartlib.com',
+      role: 'admin'
+    });
+    console.log('Default admin created: admin / password123');
+  }
+
+  // Seed books if collection is empty
+  const bookCount = await Book.countDocuments();
+  if (bookCount === 0) {
+    console.log('Seeding initial book collection...');
+    const newBestSellers = [
+      {
+        title: "The Women",
+        author: "Kristin Hannah",
+        isbn: "9781250178633",
+        category: "Historical Fiction",
+        quantity: 10,
+        available: 10,
+        description: "A story of a nurse during the Vietnam War, exploring the heroism and sacrifice of women who served.",
+        publisher: "St. Martin's Press",
+        publishedYear: 2024,
+        imageUrl: "https://images-na.ssl-images-amazon.com/images/P/1250178630.01.LZZZZZZZ.jpg"
+      },
+      {
+        title: "A Court of Thorns and Roses",
+        author: "Sarah J. Maas",
+        isbn: "9781635575569",
+        category: "Fantasy",
+        quantity: 8,
+        available: 8,
+        description: "A huntress becomes entangled in the world of the fae in this epic fantasy romance.",
+        publisher: "Bloomsbury Publishing",
+        publishedYear: 2020,
+        imageUrl: "https://images-na.ssl-images-amazon.com/images/P/1635575567.01.LZZZZZZZ.jpg"
+      },
+      {
+        title: "The Scarlet Shedder (Dog Man #12)",
+        author: "Dav Pilkey",
+        isbn: "9781338801910",
+        category: "Children's Fiction",
+        quantity: 15,
+        available: 15,
+        description: "The latest adventure of Dog Man, the hero who is part dog and part man.",
+        publisher: "Graphix",
+        publishedYear: 2024,
+        imageUrl: "https://images-na.ssl-images-amazon.com/images/P/1338801915.01.LZZZZZZZ.jpg"
+      },
+      {
+        title: "The Housemaid",
+        author: "Freida McFadden",
+        isbn: "9781538749449",
+        category: "Thriller",
+        quantity: 12,
+        available: 12,
+        description: "A twisty psychological thriller about a housemaid who learns a family's dark secrets.",
+        publisher: "Grand Central Publishing",
+        publishedYear: 2022,
+        imageUrl: "https://images-na.ssl-images-amazon.com/images/P/1538749446.01.LZZZZZZZ.jpg"
+      },
+      {
+        title: "Atomic Habits",
+        author: "James Clear",
+        isbn: "9780735211292",
+        category: "Self-Help",
+        quantity: 20,
+        available: 20,
+        description: "A proven framework for improving every day through tiny habits.",
+        publisher: "Avery",
+        publishedYear: 2018,
+        imageUrl: "https://images-na.ssl-images-amazon.com/images/P/0735211299.01.LZZZZZZZ.jpg"
+      },
+      {
+        title: "It Ends with Us",
+        author: "Colleen Hoover",
+        isbn: "9781501110368",
+        category: "Romance",
+        quantity: 10,
+        available: 10,
+        description: "A poignant story about domestic violence and the strength it takes to leave.",
+        publisher: "Atria Books",
+        publishedYear: 2016,
+        imageUrl: "https://images-na.ssl-images-amazon.com/images/P/1501110365.01.LZZZZZZZ.jpg"
+      },
+      {
+        title: "Iron Flame",
+        author: "Rebecca Yarros",
+        isbn: "9781649374172",
+        category: "Fantasy",
+        quantity: 7,
+        available: 7,
+        description: "The thrilling sequel to Fourth Wing, continuing the dragon rider saga.",
+        publisher: "Entangled: Red Tower Books",
+        publishedYear: 2023,
+        imageUrl: "https://images-na.ssl-images-amazon.com/images/P/1649374178.01.LZZZZZZZ.jpg"
+      },
+      {
+        title: "Fourth Wing",
+        author: "Rebecca Yarros",
+        isbn: "9781649374042",
+        category: "Fantasy",
+        quantity: 7,
+        available: 7,
+        description: "A dragon-riding academy fantasy that captured the world's imagination.",
+        publisher: "Entangled: Red Tower Books",
+        publishedYear: 2023,
+        imageUrl: "https://images-na.ssl-images-amazon.com/images/P/1649374046.01.LZZZZZZZ.jpg"
+      },
+      {
+        title: "A Court of Mist and Fury",
+        author: "Sarah J. Maas",
+        isbn: "9781635575583",
+        category: "Fantasy",
+        quantity: 8,
+        available: 8,
+        description: "The stunning sequel to A Court of Thorns and Roses.",
+        publisher: "Bloomsbury Publishing",
+        publishedYear: 2020,
+        imageUrl: "https://images-na.ssl-images-amazon.com/images/P/1635575583.01.LZZZZZZZ.jpg"
+      },
+      {
+        title: "It Starts with Us",
+        author: "Colleen Hoover",
+        isbn: "9781668001226",
+        category: "Romance",
+        quantity: 10,
+        available: 10,
+        description: "The long-awaited sequel to the global phenomenon It Ends with Us.",
+        publisher: "Atria Books",
+        publishedYear: 2022,
+        imageUrl: "https://images-na.ssl-images-amazon.com/images/P/1668001225.01.LZZZZZZZ.jpg"
+      }
+    ];
+    await Book.insertMany(newBestSellers);
+    console.log('Successfully seeded 10 books!');
+  }
+
+  return cachedConnection;
+}
+
+// Middleware to ensure DB connection is active before processing requests
+app.use(async (req, res, next) => {
+  try {
+    await connectToDatabase();
+    next();
+  } catch (error) {
+    console.error('Database connection error in middleware:', error);
+    res.status(500).json({ 
+      message: 'Failed to connect to database. Please check DB_URI and Atlas configuration.', 
+      error: error.message 
+    });
+  }
+});
 
 // Mount Routes
 app.use('/api/books', require('./routes/books'));
