@@ -3,7 +3,7 @@ import axios from 'axios';
 // We replaced the old mock data logic with real Axios requests to our Express backend!
 // Using 127.0.0.1 instead of localhost for better cross-platform compatibility
 const API = axios.create({ 
-  baseURL: import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000/api' 
+  baseURL: import.meta.env.VITE_API_URL || '/api' 
 });
 
 // Add token to requests

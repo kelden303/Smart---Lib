@@ -266,13 +266,20 @@ app.post('/api/auth/reset-password', async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: 'Error resetting password' });
   }
+});
+
 // Root/Status endpoint for deployment checks
 app.get('/', (req, res) => {
   res.send('Smart-Lib API is running successfully!');
 });
 
-// Start Server
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on http://127.0.0.1:${PORT}`);
-});
+// Start Server conditionally (only when run directly)
+if (require.main === module) {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on http://127.0.0.1:${PORT}`);
+  });
+}
+
+// Export Express app for Vercel Serverless Functions
+module.exports = app;
